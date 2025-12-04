@@ -7,10 +7,11 @@ views:
           # Medication Registry
 
           This dashboard demonstrates FHIRPath-indexed queries over a large
-          medication dataset. Each box below is driven by a FHIRPath expression
-          evaluated at build time and materialized into SQLite for fast runtime queries.
+          medication dataset sourced from RxNorm. Each box below is driven by a
+          FHIRPath expression evaluated at build time and materialized into SQLite
+          for fast runtime queries.
 
-      # Box 1: Oral Medications (Tablets & Capsules) with status filter
+      # Box 1: Oral Solid Medications (Tablets & Capsules) with status filter
       - type: fhirpath-table
         title: "Oral Solid Medications"
         description: "Tablets and capsules - filter by status"
@@ -30,11 +31,11 @@ views:
             path: "status"
         pageSize: 10
 
-      # Box 2: Injectable Medications with status filter
+      # Box 2: Injectable/Solution Medications
       - type: fhirpath-table
-        title: "Injectable Medications"
-        description: "Solutions for injection - filter by status"
-        expression: "Medication.where(form.coding.display = 'Solution for injection')"
+        title: "Solutions & Injectables"
+        description: "Solutions and prefilled syringes - filter by status"
+        expression: "Medication.where(form.coding.display in ('Solution' | 'Prefilled syringe'))"
         variables:
           - name: status
             type: filter
@@ -44,22 +45,22 @@ views:
         columns:
           - header: "Name"
             path: "code.text"
-          - header: "Status"
-            path: "status"
-          - header: "RxNorm"
+          - header: "Form"
+            path: "form.coding.first().display"
+          - header: "RxNorm Code"
             path: "code.coding.where(system='http://www.nlm.nih.gov/research/umls/rxnorm').first().code"
         pageSize: 10
 
       # Box 3: Topical Medications with form filter
       - type: fhirpath-table
         title: "Topical Medications"
-        description: "Ointments, creams, gels - filter by specific form"
-        expression: "Medication.where(form.coding.display in ('Ointment' | 'Cream' | 'Gel'))"
+        description: "Ointments, creams, gels, lotions - filter by specific form"
+        expression: "Medication.where(form.coding.display in ('Ointment' | 'Cream' | 'Gel' | 'Lotion'))"
         variables:
           - name: form
             type: filter
             label: "Form"
-            optionsExpression: "Medication.where(form.coding.display in ('Ointment' | 'Cream' | 'Gel')).form.coding.display.distinct()"
+            optionsExpression: "Medication.where(form.coding.display in ('Ointment' | 'Cream' | 'Gel' | 'Lotion')).form.coding.display.distinct()"
             valueExpression: "form.coding.first().display"
         columns:
           - header: "Name"
@@ -70,11 +71,11 @@ views:
             path: "status"
         pageSize: 10
 
-      # Box 4: Liquid Medications with status filter
+      # Box 4: Suspensions with status filter
       - type: fhirpath-table
-        title: "Liquid Medications"
-        description: "Oral solutions, suspensions, and liquids"
-        expression: "Medication.where(form.coding.display in ('Oral solution' | 'Liquid' | 'Suspension'))"
+        title: "Suspensions"
+        description: "Oral and injectable suspensions"
+        expression: "Medication.where(form.coding.display = 'Suspension')"
         variables:
           - name: status
             type: filter
@@ -119,33 +120,27 @@ views:
             path: "ingredient.exists()"
         pageSize: 15
 
-  - id: code-systems
-    title: "Code System Analysis"
+  - id: rxnorm-codes
+    title: "RxNorm Code Browser"
     blocks:
       - type: markdown
         content: |
-          # Code System Coverage
+          # RxNorm Code Browser
 
-          This view shows all coding entries across medications, allowing
-          analysis of which code systems are represented.
+          Browse all RxNorm codes in the medication registry. Each medication
+          is identified by a unique RxNorm Concept Unique Identifier (RXCUI).
 
       - type: fhirpath-table
-        title: "All Codings"
-        description: "Every code.coding entry from all medications - filter by system"
+        title: "RxNorm Codes"
+        description: "All RxNorm medication codes"
         expression: "Medication.code.coding"
-        variables:
-          - name: system
-            type: filter
-            label: "Code System"
-            optionsExpression: "Medication.code.coding.system.distinct()"
-            valueExpression: "system"
         columns:
+          - header: "RxNorm Code"
+            path: "code"
+          - header: "Display Name"
+            path: "display"
           - header: "System"
             path: "system"
-          - header: "Code"
-            path: "code"
-          - header: "Display"
-            path: "display"
         pageSize: 25
 
   - id: ingredients
@@ -156,7 +151,7 @@ views:
           # Medication Ingredients
 
           Analysis of active ingredients across the medication registry.
-          Only medications with ingredient data are included.
+          Ingredient data is derived from RxNorm component relationships.
 
       - type: fhirpath-table
         title: "All Ingredients"
@@ -170,3 +165,31 @@ views:
           - header: "Unit"
             path: "strength.numerator.unit"
         pageSize: 20
+
+  - id: manufacturers
+    title: "Manufacturer Analysis"
+    blocks:
+      - type: markdown
+        content: |
+          # Medication Manufacturers
+
+          Analysis of manufacturers represented in the medication registry.
+
+      - type: fhirpath-table
+        title: "Medications by Manufacturer"
+        description: "Filter medications by manufacturer"
+        expression: "Medication.where(manufacturer.exists())"
+        variables:
+          - name: manufacturer
+            type: filter
+            label: "Manufacturer"
+            optionsExpression: "Medication.manufacturer.display.distinct()"
+            valueExpression: "manufacturer.display"
+        columns:
+          - header: "Name"
+            path: "code.text"
+          - header: "Form"
+            path: "form.coding.first().display"
+          - header: "Manufacturer"
+            path: "manufacturer.display"
+        pageSize: 15
