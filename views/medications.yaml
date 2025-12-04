@@ -1,0 +1,145 @@
+views:
+  - id: dashboard
+    title: "Medication Registry Dashboard"
+    blocks:
+      - type: markdown
+        content: |
+          # Medication Registry
+
+          This dashboard demonstrates FHIRPath-indexed queries over a large
+          medication dataset. Each box below is driven by a FHIRPath expression
+          evaluated at build time and materialized into SQLite for fast runtime queries.
+
+      # Box 1: Oral Medications (Tablets & Capsules)
+      - type: fhirpath-table
+        title: "Oral Solid Medications"
+        description: "Tablets and capsules - the most common oral dosage forms"
+        expression: "Medication.where(form.coding.display in ('Tablet' | 'Capsule'))"
+        columns:
+          - header: "Name"
+            path: "code.text"
+          - header: "Form"
+            path: "form.coding.first().display"
+          - header: "Status"
+            path: "status"
+        pageSize: 10
+
+      # Box 2: Injectable Medications
+      - type: fhirpath-table
+        title: "Injectable Medications"
+        description: "Solutions for injection - hospital and specialty medications"
+        expression: "Medication.where(form.coding.display = 'Solution for injection')"
+        columns:
+          - header: "Name"
+            path: "code.text"
+          - header: "Status"
+            path: "status"
+          - header: "RxNorm"
+            path: "code.coding.where(system='http://www.nlm.nih.gov/research/umls/rxnorm').first().code"
+        pageSize: 10
+
+      # Box 3: Topical Medications
+      - type: fhirpath-table
+        title: "Topical Medications"
+        description: "Ointments, creams, gels - for external application"
+        expression: "Medication.where(form.coding.display in ('Ointment' | 'Cream' | 'Gel'))"
+        columns:
+          - header: "Name"
+            path: "code.text"
+          - header: "Form"
+            path: "form.coding.first().display"
+          - header: "Status"
+            path: "status"
+        pageSize: 10
+
+      # Box 4: Liquid Medications
+      - type: fhirpath-table
+        title: "Liquid Medications"
+        description: "Oral solutions, suspensions, and liquids"
+        expression: "Medication.where(form.coding.display in ('Oral solution' | 'Liquid' | 'Suspension'))"
+        columns:
+          - header: "Name"
+            path: "code.text"
+          - header: "Form"
+            path: "form.coding.first().display"
+          - header: "Status"
+            path: "status"
+        pageSize: 10
+
+      # Box 5: All Medications with Filters
+      - type: fhirpath-table
+        title: "All Medications (Filterable)"
+        description: "Complete medication list with status and form filters"
+        expression: "Medication"
+        variables:
+          - name: status
+            type: filter
+            label: "Status"
+            optionsExpression: "Medication.status.distinct()"
+          - name: form
+            type: filter
+            label: "Dose Form"
+            optionsExpression: "Medication.form.coding.display.distinct()"
+        columns:
+          - header: "ID"
+            path: "id"
+          - header: "Name"
+            path: "code.text"
+          - header: "Status"
+            path: "status"
+          - header: "Form"
+            path: "form.coding.first().display"
+          - header: "Has Ingredients"
+            path: "ingredient.exists()"
+        pageSize: 15
+
+  - id: code-systems
+    title: "Code System Analysis"
+    blocks:
+      - type: markdown
+        content: |
+          # Code System Coverage
+
+          This view shows all coding entries across medications, allowing
+          analysis of which code systems are represented.
+
+      - type: fhirpath-table
+        title: "All Codings"
+        description: "Every code.coding entry from all medications"
+        expression: "Medication.code.coding"
+        variables:
+          - name: system
+            type: filter
+            label: "Code System"
+            optionsExpression: "Medication.code.coding.system.distinct()"
+        columns:
+          - header: "System"
+            path: "system"
+          - header: "Code"
+            path: "code"
+          - header: "Display"
+            path: "display"
+        pageSize: 25
+
+  - id: ingredients
+    title: "Ingredient Analysis"
+    blocks:
+      - type: markdown
+        content: |
+          # Medication Ingredients
+
+          Analysis of active ingredients across the medication registry.
+          Only medications with ingredient data are included.
+
+      - type: fhirpath-table
+        title: "All Ingredients"
+        description: "Ingredient entries from medications that have them"
+        expression: "Medication.ingredient"
+        columns:
+          - header: "Ingredient"
+            path: "itemCodeableConcept.coding.first().display"
+          - header: "Strength"
+            path: "strength.numerator.value"
+          - header: "Unit"
+            path: "strength.numerator.unit"
+        pageSize: 20

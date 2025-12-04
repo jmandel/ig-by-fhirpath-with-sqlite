@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FHIRPath Index Viewer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+  <style>
+    :root {
+      --bg: #f8f9fa;
+      --card-bg: white;
+      --text: #333;
+      --text-muted: #666;
+      --border: #dee2e6;
+      --primary: #0066cc;
+      --primary-light: #e7f1ff;
+      --code-bg: #f1f3f5;
+      --tech-bg: #fff9e6;
+      --tech-border: #ffc107;
+      --success: #28a745;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    header {
+      background: linear-gradient(135deg, #0066cc, #004499);
+      color: white;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.75rem;
+    }
+    header .subtitle {
+      opacity: 0.9;
+      font-size: 0.95rem;
+      margin-top: 5px;
+    }
+    nav {
+      margin-top: 15px;
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    nav a {
+      color: white;
+      text-decoration: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.1);
+      transition: background 0.2s;
+    }
+    nav a:hover { background: rgba(255,255,255,0.2); }
+    nav a.active {
+      background: white;
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    /* Cards grid for dashboard */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 15px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .card-header h3 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+    .card-header .description {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+    .card-body {
+      padding: 15px 20px;
+    }
+
+    /* Technical details box */
+    .tech-details {
+      background: var(--tech-bg);
+      border: 1px solid var(--tech-border);
+      border-radius: 6px;
+      padding: 12px 15px;
+      margin-bottom: 15px;
+      font-size: 0.85rem;
+    }
+    .tech-details summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: #856404;
+    }
+    .tech-details[open] summary {
+      margin-bottom: 10px;
+    }
+    .tech-label {
+      display: inline-block;
+      background: #856404;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      margin-right: 8px;
+      font-weight: 600;
+    }
+    .tech-expr {
+      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+      background: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      margin-top: 8px;
+      border: 1px solid #e9ecef;
+      word-break: break-all;
+    }
+    .tech-columns {
+      margin-top: 10px;
+    }
+    .tech-columns code {
+      background: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.8rem;
+      margin-right: 5px;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: var(--bg);
+      font-weight: 600;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+    }
+    tr:hover { background: #f8f9fa; }
+    td a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+    td a:hover { text-decoration: underline; }
+
+    /* Stats badge */
+    .stats-badge {
+      display: inline-block;
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    /* Filters */
+    .filters {
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+      padding: 15px;
+      background: var(--bg);
+      border-radius: 6px;
+    }
+    .filter-group {
+      flex: 1;
+      min-width: 150px;
+    }
+    .filter-group label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.9rem;
+      background: white;
+    }
+    select:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(0,102,204,0.1);
+    }
+
+    /* Pagination */
+    .pagination {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      padding: 15px;
+      border-top: 1px solid var(--border);
+      background: var(--bg);
+    }
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    button:hover:not(:disabled) {
+      background: #0055aa;
+    }
+    .page-info {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    /* Markdown blocks */
+    .markdown-block {
+      padding: 20px;
+    }
+    .markdown-block h1 {
+      font-size: 1.75rem;
+      margin-top: 0;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--border);
+    }
+    .markdown-block p {
+      color: var(--text-muted);
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 60px;
+      color: var(--text-muted);
+    }
+    .loading::after {
+      content: '';
+      display: block;
+      width: 30px;
+      height: 30px;
+      margin: 20px auto;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Full width card */
+    .full-width {
+      grid-column: 1 / -1;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>FHIRPath Index Viewer</h1>
+    <div class="subtitle">Pre-indexed FHIRPath queries over FHIR resources - Demo for IG Publisher optimization</div>
+    <nav id="nav"></nav>
+  </header>
+  <div class="container" id="app">
+    <div class="loading">Loading database...</div>
+  </div>
+
+  <script type="module">
+    // Initialize SQL.js
+    const SQL = await initSqlJs({
+      locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${file}`
+    });
+
+    // State
+    let db = null;
+    let views = [];
+    let expressions = {};
+    let currentView = null;
+    let blockStates = {}; // Track page state per block
+
+    // Load database
+    async function loadDatabase() {
+      const startTime = performance.now();
+      const response = await fetch('./index.db');
+      const buffer = await response.arrayBuffer();
+      db = new SQL.Database(new Uint8Array(buffer));
+      const loadTime = (performance.now() - startTime).toFixed(0);
+
+      // Load views
+      const viewRows = db.exec('SELECT id, definition_json FROM views');
+      if (viewRows.length > 0) {
+        views = viewRows[0].values.map(([id, json]) => JSON.parse(json));
+      }
+
+      // Load expressions
+      const exprRows = db.exec('SELECT id, expression, projections_json FROM expressions');
+      if (exprRows.length > 0) {
+        for (const [id, expr, projJson] of exprRows[0].values) {
+          expressions[expr] = {
+            id,
+            expression: expr,
+            projections: projJson ? JSON.parse(projJson) : null
+          };
+        }
+      }
+
+      // Get total row count
+      const countResult = db.exec('SELECT COUNT(*) FROM fhirpath_index');
+      const totalRows = countResult[0]?.values[0]?.[0] || 0;
+
+      // Build nav
+      const nav = document.getElementById('nav');
+      nav.innerHTML = views.map(v =>
+        `<a href="#${v.id}" data-view="${v.id}">${v.title}</a>`
+      ).join('');
+
+      // Handle nav clicks
+      nav.addEventListener('click', (e) => {
+        if (e.target.dataset.view) {
+          e.preventDefault();
+          navigateTo(e.target.dataset.view);
+        }
+      });
+
+      console.log(`Database loaded in ${loadTime}ms, ${totalRows.toLocaleString()} index rows`);
+
+      // Initial route
+      const hash = window.location.hash.slice(1) || views[0]?.id;
+      navigateTo(hash);
+    }
+
+    function navigateTo(viewId) {
+      currentView = views.find(v => v.id === viewId);
+      blockStates = {}; // Reset pagination
+      window.location.hash = viewId;
+
+      // Update nav active state
+      document.querySelectorAll('nav a').forEach(a => {
+        a.classList.toggle('active', a.dataset.view === viewId);
+      });
+
+      renderView();
+    }
+
+    function renderView() {
+      if (!currentView) {
+        document.getElementById('app').innerHTML = '<div class="card"><div class="card-body">View not found</div></div>';
+        return;
+      }
+
+      const app = document.getElementById('app');
+
+      // Check if this is a dashboard with multiple table blocks
+      const tableBlocks = currentView.blocks.filter(b => b.type === 'fhirpath-table');
+      const useGrid = tableBlocks.length > 2;
+
+      let html = '';
+      if (useGrid) {
+        html = '<div class="cards-grid">';
+      }
+
+      currentView.blocks.forEach((block, i) => {
+        const isFullWidth = block.type === 'markdown' ||
+          (block.variables && block.variables.length > 0);
+        const fullWidthClass = useGrid && isFullWidth ? ' full-width' : '';
+        html += renderBlock(block, i, fullWidthClass);
+      });
+
+      if (useGrid) {
+        html += '</div>';
+      }
+
+      app.innerHTML = html;
+      attachEventListeners();
+    }
+
+    function renderBlock(block, index, extraClass = '') {
+      switch (block.type) {
+        case 'markdown':
+          return `<div class="card${extraClass}">
+            <div class="markdown-block">${formatMarkdown(block.content)}</div>
+          </div>`;
+
+        case 'fhirpath-table':
+          return renderTableBlock(block, index, extraClass);
+
+        default:
+          return `<div class="card${extraClass}"><div class="card-body">Unknown block type: ${block.type}</div></div>`;
+      }
+    }
+
+    function renderTableBlock(block, index, extraClass) {
+      const exprInfo = expressions[block.expression];
+      if (!exprInfo) {
+        return `<div class="card${extraClass}">
+          <div class="card-header"><h3>${block.title || 'Query Results'}</h3></div>
+          <div class="card-body">
+            <div class="tech-details open">
+              <span class="tech-label">FHIRPath</span> Expression not indexed
+              <div class="tech-expr">${escapeHtml(block.expression)}</div>
+            </div>
+            <p>This expression was not pre-indexed (may contain runtime variables).</p>
+          </div>
+        </div>`;
+      }
+
+      // Get block state
+      if (!blockStates[index]) {
+        blockStates[index] = { page: 0, filters: {} };
+      }
+      const state = blockStates[index];
+
+      const pageSize = block.pageSize || 50;
+      const offset = state.page * pageSize;
+
+      // Build filter options and values
+      let filterHtml = '';
+      let activeFilters = [];
+
+      if (block.variables) {
+        filterHtml = '<div class="filters">';
+        for (const v of block.variables) {
+          if (v.type === 'filter' && v.optionsExpression) {
+            const optExpr = expressions[v.optionsExpression];
+            let options = ['All'];
+
+            if (optExpr) {
+              const optResult = db.exec(
+                `SELECT DISTINCT value_json FROM fhirpath_index WHERE expression_id = ? ORDER BY value_json`,
+                [optExpr.id]
+              );
+              if (optResult[0]) {
+                options = options.concat(optResult[0].values.map(([v]) => JSON.parse(v)));
+              }
+            }
+
+            const currentValue = state.filters[v.name] || 'All';
+            if (currentValue !== 'All') {
+              activeFilters.push({ name: v.name, value: currentValue, label: v.label });
+            }
+
+            filterHtml += `
+              <div class="filter-group">
+                <label>${v.label || v.name}</label>
+                <select data-block="${index}" data-filter="${v.name}">
+                  ${options.map(opt =>
+                    `<option value="${escapeHtml(String(opt))}" ${opt === currentValue ? 'selected' : ''}>${escapeHtml(String(opt))}</option>`
+                  ).join('')}
+                </select>
+              </div>`;
+          }
+        }
+        filterHtml += '</div>';
+      }
+
+      // Get total count (would need filtering in real impl)
+      const countResult = db.exec(
+        `SELECT COUNT(*) FROM fhirpath_index WHERE expression_id = ?`,
+        [exprInfo.id]
+      );
+      const totalCount = countResult[0]?.values[0]?.[0] || 0;
+      const totalPages = Math.ceil(totalCount / pageSize);
+
+      // Query timing
+      const queryStart = performance.now();
+
+      // Get page of results
+      const results = db.exec(
+        `SELECT source_resource_id, source_path, value_json FROM fhirpath_index
+         WHERE expression_id = ?
+         ORDER BY source_resource_id
+         LIMIT ? OFFSET ?`,
+        [exprInfo.id, pageSize, offset]
+      );
+
+      const queryTime = (performance.now() - queryStart).toFixed(1);
+      const rows = results[0]?.values || [];
+
+      // Render columns
+      const columns = block.columns || [
+        { header: 'Resource ID', path: 'id' },
+        { header: 'Value', path: null }
+      ];
+
+      // Build available filters info
+      let availableFiltersHtml = '';
+      if (block.variables && block.variables.length > 0) {
+        const filterDefs = block.variables
+          .filter(v => v.type === 'filter')
+          .map(v => {
+            const optExpr = v.optionsExpression ? expressions[v.optionsExpression] : null;
+            const optExprStr = v.optionsExpression || 'static';
+            return `<code>${v.name}: string</code> <span style="color:#888; font-size:0.75rem;">(from: ${escapeHtml(optExprStr)})</span>`;
+          });
+        if (filterDefs.length > 0) {
+          availableFiltersHtml = `
+            <div style="margin-top: 8px;">
+              <strong>Available Filters:</strong><br>
+              ${filterDefs.join('<br>')}
+            </div>`;
+        }
+      }
+
+      // Build technical details
+      const techDetails = `
+        <details class="tech-details" open>
+          <summary>Technical Details (for Grahame)</summary>
+          <div style="margin-top: 10px;">
+            <div><span class="tech-label">FHIRPath</span></div>
+            <div class="tech-expr">${escapeHtml(block.expression)}</div>
+
+            <div class="tech-columns">
+              <strong>Column Projections:</strong><br>
+              ${columns.map(c => `<code>${c.header}: ${c.path || 'raw'}</code>`).join(' ')}
+            </div>
+
+            ${availableFiltersHtml}
+
+            ${activeFilters.length > 0 ? `
+              <div style="margin-top: 8px;">
+                <strong>Active Filters:</strong><br>
+                ${activeFilters.map(f => `<code>${f.label} = "${f.value}"</code>`).join(' ')}
+              </div>
+            ` : ''}
+
+            <div style="margin-top: 8px; color: #666; font-size: 0.8rem;">
+              Index ID: ${exprInfo.id} | Query time: ${queryTime}ms | SQLite rows: ${totalCount.toLocaleString()}
+            </div>
+          </div>
+        </details>`;
+
+      // Build table HTML
+      let tableHtml = '<table><thead><tr>';
+      tableHtml += columns.map(c => `<th>${escapeHtml(c.header)}</th>`).join('');
+      tableHtml += '</tr></thead><tbody>';
+
+      for (const [resourceId, sourcePath, valueJson] of rows) {
+        const value = JSON.parse(valueJson);
+        tableHtml += '<tr>';
+        for (const col of columns) {
+          const cellValue = col.path ? getNestedValue(value, col.path) : value;
+          let displayValue = typeof cellValue === 'object' ? JSON.stringify(cellValue) : cellValue;
+          if (displayValue === true) displayValue = 'Yes';
+          if (displayValue === false) displayValue = 'No';
+          if (displayValue === null || displayValue === undefined) displayValue = '-';
+
+          if (col.link) {
+            const link = col.link.replace(/\{\{(\w+)\}\}/g, (_, key) =>
+              encodeURIComponent(getNestedValue(value, key) || resourceId)
+            );
+            tableHtml += `<td><a href="${link}">${escapeHtml(String(displayValue))}</a></td>`;
+          } else {
+            tableHtml += `<td>${escapeHtml(String(displayValue))}</td>`;
+          }
+        }
+        tableHtml += '</tr>';
+      }
+
+      tableHtml += '</tbody></table>';
+
+      // Pagination
+      let paginationHtml = '';
+      if (totalPages > 1) {
+        paginationHtml = `
+          <div class="pagination">
+            <button data-block="${index}" data-action="prev" ${state.page === 0 ? 'disabled' : ''}>Previous</button>
+            <span class="page-info">Page ${state.page + 1} of ${totalPages}</span>
+            <button data-block="${index}" data-action="next" ${state.page >= totalPages - 1 ? 'disabled' : ''}>Next</button>
+          </div>`;
+      }
+
+      return `
+        <div class="card${extraClass}" data-block-index="${index}">
+          <div class="card-header">
+            <h3>${block.title || 'Query Results'}</h3>
+            ${block.description ? `<div class="description">${block.description}</div>` : ''}
+            <span class="stats-badge">${totalCount.toLocaleString()} results</span>
+          </div>
+          <div class="card-body">
+            ${techDetails}
+            ${filterHtml}
+            ${tableHtml}
+          </div>
+          ${paginationHtml}
+        </div>`;
+    }
+
+    function getNestedValue(obj, path) {
+      if (!path) return obj;
+
+      // Handle simple FHIRPath-like expressions
+      // Replace .first() with array access, handle .where() clauses simply
+      let processedPath = path
+        .replace(/\.first\(\)/g, '[0]')
+        .replace(/\.where\([^)]+\)/g, '[0]'); // Simplified: just take first match
+
+      const parts = processedPath.split('.');
+      let current = obj;
+
+      for (const part of parts) {
+        if (current == null) return null;
+
+        // Handle [index] at end of part name
+        const match = part.match(/^(\w+)\[(\d+)\]$/);
+        if (match) {
+          current = current[match[1]];
+          if (Array.isArray(current)) {
+            current = current[parseInt(match[2])];
+          }
+        } else if (part === 'exists()') {
+          return current !== null && current !== undefined &&
+            (!Array.isArray(current) || current.length > 0);
+        } else if (part.includes('[')) {
+          // Handle standalone [0]
+          const idx = parseInt(part.match(/\[(\d+)\]/)?.[1] || '0');
+          if (Array.isArray(current)) {
+            current = current[idx];
+          }
+        } else {
+          current = current[part];
+        }
+      }
+
+      return current;
+    }
+
+    function formatMarkdown(text) {
+      // Very basic markdown
+      return text
+        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code>$1</code>')
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/^/, '<p>')
+        .replace(/$/, '</p>');
+    }
+
+    function escapeHtml(str) {
+      if (typeof str !== 'string') return str;
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function attachEventListeners() {
+      // Pagination
+      document.querySelectorAll('[data-action]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const blockIndex = parseInt(e.target.dataset.block);
+          const action = e.target.dataset.action;
+
+          if (!blockStates[blockIndex]) blockStates[blockIndex] = { page: 0, filters: {} };
+
+          if (action === 'prev') {
+            blockStates[blockIndex].page = Math.max(0, blockStates[blockIndex].page - 1);
+          } else if (action === 'next') {
+            blockStates[blockIndex].page++;
+          }
+
+          renderView();
+        });
+      });
+
+      // Filters
+      document.querySelectorAll('select[data-filter]').forEach(sel => {
+        sel.addEventListener('change', (e) => {
+          const blockIndex = parseInt(e.target.dataset.block);
+          const filterName = e.target.dataset.filter;
+          const value = e.target.value;
+
+          if (!blockStates[blockIndex]) blockStates[blockIndex] = { page: 0, filters: {} };
+          blockStates[blockIndex].filters[filterName] = value;
+          blockStates[blockIndex].page = 0; // Reset to first page
+
+          renderView();
+        });
+      });
+    }
+
+    // Start
+    loadDatabase().catch(err => {
+      document.getElementById('app').innerHTML =
+        `<div class="card"><div class="card-body">Error loading database: ${err.message}</div></div>`;
+      console.error(err);
+    });
+  </script>
+</body>
+</html>

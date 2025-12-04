@@ -1,0 +1,24 @@
+{
+  "name": "fhirpath-index",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "generate": "bun run src/generate-medications.ts",
+    "index": "bun run src/indexer.ts",
+    "serve": "bun run src/serve.ts",
+    "serve:10k": "bun run src/serve.ts index-10k.db",
+    "serve:100k": "bun run src/serve.ts index-100k.db",
+    "build": "bun run build.ts",
+    "build:full": "bun run generate && bun run build"
+  },
+  "dependencies": {
+    "fhirpath": "^3.15.1",
+    "better-sqlite3": "^11.6.0",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/bun": "latest",
+    "typescript": "^5.7.2"
+  }
+}

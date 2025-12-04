@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Generated data (rebuilt in CI)
+data/
+output/
+
+# Build output
+dist/
+
+# Bun
+bun.lockb
+
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
