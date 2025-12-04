@@ -1,7 +1,9 @@
 #!/usr/bin/env bun
 
 import { writeFileSync, mkdirSync } from "fs";
-import { dirname } from "path";
+import { dirname, join } from "path";
+
+const ROOT = dirname(dirname(import.meta.path));
 
 // Realistic medication data pools
 const medicationNames = [
@@ -254,9 +256,9 @@ function generateMedications(count: number, outputPath: string) {
 console.log("FHIR R4 Medication Resource Generator\n");
 
 // Generate 10K medications
-generateMedications(10000, "/home/jmandel/hobby/fhirpathindex/data/medications-10k.ndjson");
+generateMedications(10000, join(ROOT, "data/medications-10k.ndjson"));
 
 // Generate 100K medications
-generateMedications(100000, "/home/jmandel/hobby/fhirpathindex/data/medications-100k.ndjson");
+generateMedications(100000, join(ROOT, "data/medications-100k.ndjson"));
 
 console.log("Generation complete!");
