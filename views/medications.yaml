@@ -10,11 +10,17 @@ views:
           medication dataset. Each box below is driven by a FHIRPath expression
           evaluated at build time and materialized into SQLite for fast runtime queries.
 
-      # Box 1: Oral Medications (Tablets & Capsules)
+      # Box 1: Oral Medications (Tablets & Capsules) with status filter
       - type: fhirpath-table
         title: "Oral Solid Medications"
-        description: "Tablets and capsules - the most common oral dosage forms"
+        description: "Tablets and capsules - filter by status"
         expression: "Medication.where(form.coding.display in ('Tablet' | 'Capsule'))"
+        variables:
+          - name: status
+            type: filter
+            label: "Status"
+            optionsExpression: "Medication.status.distinct()"
+            valueExpression: "status"
         columns:
           - header: "Name"
             path: "code.text"
@@ -24,11 +30,17 @@ views:
             path: "status"
         pageSize: 10
 
-      # Box 2: Injectable Medications
+      # Box 2: Injectable Medications with status filter
       - type: fhirpath-table
         title: "Injectable Medications"
-        description: "Solutions for injection - hospital and specialty medications"
+        description: "Solutions for injection - filter by status"
         expression: "Medication.where(form.coding.display = 'Solution for injection')"
+        variables:
+          - name: status
+            type: filter
+            label: "Status"
+            optionsExpression: "Medication.status.distinct()"
+            valueExpression: "status"
         columns:
           - header: "Name"
             path: "code.text"
@@ -38,11 +50,17 @@ views:
             path: "code.coding.where(system='http://www.nlm.nih.gov/research/umls/rxnorm').first().code"
         pageSize: 10
 
-      # Box 3: Topical Medications
+      # Box 3: Topical Medications with form filter
       - type: fhirpath-table
         title: "Topical Medications"
-        description: "Ointments, creams, gels - for external application"
+        description: "Ointments, creams, gels - filter by specific form"
         expression: "Medication.where(form.coding.display in ('Ointment' | 'Cream' | 'Gel'))"
+        variables:
+          - name: form
+            type: filter
+            label: "Form"
+            optionsExpression: "Medication.where(form.coding.display in ('Ointment' | 'Cream' | 'Gel')).form.coding.display.distinct()"
+            valueExpression: "form.coding.first().display"
         columns:
           - header: "Name"
             path: "code.text"
@@ -52,11 +70,17 @@ views:
             path: "status"
         pageSize: 10
 
-      # Box 4: Liquid Medications
+      # Box 4: Liquid Medications with status filter
       - type: fhirpath-table
         title: "Liquid Medications"
         description: "Oral solutions, suspensions, and liquids"
         expression: "Medication.where(form.coding.display in ('Oral solution' | 'Liquid' | 'Suspension'))"
+        variables:
+          - name: status
+            type: filter
+            label: "Status"
+            optionsExpression: "Medication.status.distinct()"
+            valueExpression: "status"
         columns:
           - header: "Name"
             path: "code.text"
@@ -66,7 +90,7 @@ views:
             path: "status"
         pageSize: 10
 
-      # Box 5: All Medications with Filters
+      # Box 5: All Medications with multiple filters
       - type: fhirpath-table
         title: "All Medications (Filterable)"
         description: "Complete medication list with status and form filters"
@@ -76,10 +100,12 @@ views:
             type: filter
             label: "Status"
             optionsExpression: "Medication.status.distinct()"
+            valueExpression: "status"
           - name: form
             type: filter
             label: "Dose Form"
             optionsExpression: "Medication.form.coding.display.distinct()"
+            valueExpression: "form.coding.first().display"
         columns:
           - header: "ID"
             path: "id"
@@ -105,13 +131,14 @@ views:
 
       - type: fhirpath-table
         title: "All Codings"
-        description: "Every code.coding entry from all medications"
+        description: "Every code.coding entry from all medications - filter by system"
         expression: "Medication.code.coding"
         variables:
           - name: system
             type: filter
             label: "Code System"
             optionsExpression: "Medication.code.coding.system.distinct()"
+            valueExpression: "system"
         columns:
           - header: "System"
             path: "system"

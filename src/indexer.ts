@@ -12,7 +12,7 @@ import { Database } from 'bun:sqlite';
 import * as fs from 'fs';
 import * as readline from 'readline';
 import YAML from 'yaml';
-import type { ViewRegistry, ExpressionToIndex, FhirpathIndexRow } from './types';
+import type { ViewRegistry, ExpressionToIndex, FhirpathIndexRow, FilterToIndex } from './types';
 
 // Helper to build full path from fhirpath.js internal node
 function buildFullPath(node: any): string {
@@ -72,6 +72,43 @@ function hasUnboundVariables(expression: string): boolean {
 }
 
 /**
+ * Evaluate a simple FHIRPath expression (without path metadata)
+ */
+function evaluateSimple(resource: any, expression: string): any {
+  try {
+    const results = fhirpath.evaluate(
+      resource,
+      expression,
+      null,
+      fhirpath_r4_model
+    );
+    // Return first result or null
+    return results.length > 0 ? results[0] : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
+ * Extract filter values from a result value using FHIRPath expressions
+ */
+function extractFilterValues(value: any, filters: FilterToIndex[]): Record<string, any> | null {
+  if (!filters || filters.length === 0) return null;
+
+  const result: Record<string, any> = {};
+
+  for (const filter of filters) {
+    // Evaluate FHIRPath expression on the result value
+    const filterValue = evaluateSimple(value, filter.valueExpression);
+    if (filterValue !== undefined && filterValue !== null) {
+      result[filter.name] = filterValue;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+/**
  * Extract all FHIRPath expressions from view definitions
  */
 function extractExpressions(registry: ViewRegistry): ExpressionToIndex[] {
@@ -104,6 +141,22 @@ function extractExpressions(registry: ViewRegistry): ExpressionToIndex[] {
             name: col.header,
             path: col.path
           }));
+        }
+
+        // Extract filter definitions
+        if ('variables' in block && block.variables) {
+          const filters: FilterToIndex[] = [];
+          for (const v of block.variables) {
+            if (v.type === 'filter' && v.valueExpression) {
+              filters.push({
+                name: v.name,
+                valueExpression: v.valueExpression
+              });
+            }
+          }
+          if (filters.length > 0) {
+            toIndex.filters = filters;
+          }
         }
 
         expressions.push(toIndex);
@@ -162,7 +215,8 @@ function initDatabase(dbPath: string): Database {
       source_resource_id TEXT NOT NULL,
       source_resource_type TEXT NOT NULL,
       source_path TEXT,
-      value_json TEXT NOT NULL
+      value_json TEXT NOT NULL,
+      filter_values_json TEXT
     );
 
     CREATE INDEX idx_expression ON fhirpath_index(expression_id);
@@ -241,8 +295,8 @@ async function runIndexer(
   // Prepare insert statement for index rows
   const insertIndex = db.prepare(`
     INSERT INTO fhirpath_index (
-      expression_id, source_resource_id, source_resource_type, source_path, value_json
-    ) VALUES (?, ?, ?, ?, ?)
+      expression_id, source_resource_id, source_resource_type, source_path, value_json, filter_values_json
+    ) VALUES (?, ?, ?, ?, ?, ?)
   `);
 
   // Process resources
@@ -259,7 +313,8 @@ async function runIndexer(
         row.source_resource_id,
         row.source_resource_type,
         row.source_path,
-        row.value_json
+        row.value_json,
+        row.filter_values_json
       );
     }
   });
@@ -280,12 +335,18 @@ async function runIndexer(
       const results = evaluateWithPaths(resource, expr.expression);
 
       for (const result of results) {
+        // Compute filter values if this expression has filters
+        const filterValues = expr.filters
+          ? extractFilterValues(result.value, expr.filters)
+          : null;
+
         const row: FhirpathIndexRow = {
           expression_id: expr.id,
           source_resource_id: resource.id || 'unknown',
           source_resource_type: resource.resourceType || 'unknown',
           source_path: result.path || '',
-          value_json: JSON.stringify(result.value)
+          value_json: JSON.stringify(result.value),
+          filter_values_json: filterValues ? JSON.stringify(filterValues) : null
         };
 
         batch.push(row);

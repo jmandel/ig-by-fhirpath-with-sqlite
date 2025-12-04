@@ -491,10 +491,19 @@
         filterHtml += '</div>';
       }
 
-      // Get total count (would need filtering in real impl)
+      // Build filter WHERE clause using JSON extraction
+      let filterWhere = '';
+      const filterParams = [];
+      for (const f of activeFilters) {
+        // Use json_extract to filter on filter_values_json column
+        filterWhere += ` AND json_extract(filter_values_json, '$.${f.name}') = ?`;
+        filterParams.push(f.value);
+      }
+
+      // Get total count with filters
       const countResult = db.exec(
-        `SELECT COUNT(*) FROM fhirpath_index WHERE expression_id = ?`,
-        [exprInfo.id]
+        `SELECT COUNT(*) FROM fhirpath_index WHERE expression_id = ?${filterWhere}`,
+        [exprInfo.id, ...filterParams]
       );
       const totalCount = countResult[0]?.values[0]?.[0] || 0;
       const totalPages = Math.ceil(totalCount / pageSize);
@@ -502,13 +511,13 @@
       // Query timing
       const queryStart = performance.now();
 
-      // Get page of results
+      // Get page of results with filters
       const results = db.exec(
         `SELECT source_resource_id, source_path, value_json FROM fhirpath_index
-         WHERE expression_id = ?
+         WHERE expression_id = ?${filterWhere}
          ORDER BY source_resource_id
          LIMIT ? OFFSET ?`,
-        [exprInfo.id, pageSize, offset]
+        [exprInfo.id, ...filterParams, pageSize, offset]
       );
 
       const queryTime = (performance.now() - queryStart).toFixed(1);
@@ -526,15 +535,19 @@
         const filterDefs = block.variables
           .filter(v => v.type === 'filter')
           .map(v => {
-            const optExpr = v.optionsExpression ? expressions[v.optionsExpression] : null;
-            const optExprStr = v.optionsExpression || 'static';
-            return `<code>${v.name}: string</code> <span style="color:#888; font-size:0.75rem;">(from: ${escapeHtml(optExprStr)})</span>`;
+            const valueExpr = v.valueExpression || '(not defined)';
+            return `<div style="margin-bottom: 4px;">
+              <code>${v.name}</code>
+              <span style="color:#888; font-size:0.75rem; margin-left: 8px;">
+                valueExpression: <code>${escapeHtml(valueExpr)}</code>
+              </span>
+            </div>`;
           });
         if (filterDefs.length > 0) {
           availableFiltersHtml = `
             <div style="margin-top: 8px;">
               <strong>Available Filters:</strong><br>
-              ${filterDefs.join('<br>')}
+              ${filterDefs.join('')}
             </div>`;
         }
       }

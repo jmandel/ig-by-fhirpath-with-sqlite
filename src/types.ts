@@ -9,6 +9,9 @@ export interface ViewVariable {
   label?: string;
   // FHIRPath to get distinct values for dropdown (only for filter type)
   optionsExpression?: string;
+  // FHIRPath expression evaluated on each result to get filter value
+  // e.g., "status" or "form.coding.first().display"
+  valueExpression?: string;
   defaultValue?: string;
 }
 
@@ -87,6 +90,14 @@ export interface FhirpathIndexRow {
   source_resource_type: string;
   source_path: string;
   value_json: string;
+  filter_values_json: string | null; // JSON object {filterName: filterValue, ...}
+}
+
+// Filter definition for indexing
+export interface FilterToIndex {
+  name: string;
+  // FHIRPath expression evaluated on each result item to get filter value
+  valueExpression: string;
 }
 
 // Extracted expression info for indexing
@@ -95,4 +106,6 @@ export interface ExpressionToIndex {
   expression: string;
   // Column projections to also index
   projections?: { name: string; path: string }[];
+  // Filters to compute for each result
+  filters?: FilterToIndex[];
 }
