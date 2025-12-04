@@ -3,6 +3,7 @@ node_modules/
 
 # Generated data (rebuilt in CI)
 data/
+!data/rxnorm-source.jsonl
 output/
 
 # Build output
