@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
-import { writeFileSync } from "fs";
+import { writeFileSync, mkdirSync } from "fs";
+import { dirname } from "path";
 
 // Realistic medication data pools
 const medicationNames = [
@@ -236,6 +237,8 @@ function generateMedications(count: number, outputPath: string) {
     }
   }
 
+  // Ensure directory exists
+  mkdirSync(dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, output);
 
   const endTime = Date.now();
